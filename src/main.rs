@@ -47,29 +47,80 @@ fn process_chunk(
     h7: &mut u32,
 ) {
     let mut schedule = [0u32; 64];
+    let chunk: &[[u8; 4]; 16] = unsafe { std::mem::transmute(chunk) };
+
     for (index, word) in schedule[0..16].iter_mut().enumerate() {
-        *word = u32::from_be_bytes([
-            chunk[index * 4],
-            chunk[index * 4 + 1],
-            chunk[index * 4 + 2],
-            chunk[index * 4 + 3],
-        ]);
+        *word = u32::from_be_bytes(unsafe { *chunk.get_unchecked(index) })
     }
 
-    for extend_round in 16..64 {
-        schedule[extend_round] = unsafe { *schedule.get_unchecked(extend_round - 16) }
-            .wrapping_add(
-                schedule[extend_round - 15].rotate_right(7)
-                    ^ schedule[extend_round - 15].rotate_right(18)
-                    ^ (schedule[extend_round - 15] >> 3),
-            )
-            .wrapping_add(schedule[extend_round - 7])
-            .wrapping_add(
-                schedule[extend_round - 2].rotate_right(17)
-                    ^ schedule[extend_round - 2].rotate_right(19)
-                    ^ (schedule[extend_round - 2] >> 10),
-            );
+    macro_rules! expand_one {
+        ($i:expr) => {
+            schedule[$i] = unsafe {
+                let s0 = schedule[$i - 15].rotate_right(7)
+                    ^ schedule[$i - 15].rotate_right(18)
+                    ^ (schedule[$i - 15] >> 3);
+
+                let s1 = schedule[$i - 2].rotate_right(17)
+                    ^ schedule[$i - 2].rotate_right(19)
+                    ^ (schedule[$i - 2] >> 10);
+
+                schedule[$i - 16]
+                    .wrapping_add(s0)
+                    .wrapping_add(schedule[$i - 7])
+                    .wrapping_add(s1)
+            };
+        };
     }
+
+    // Unroll the entire message schedule expansion
+    expand_one!(16);
+    expand_one!(17);
+    expand_one!(18);
+    expand_one!(19);
+    expand_one!(20);
+    expand_one!(21);
+    expand_one!(22);
+    expand_one!(23);
+    expand_one!(24);
+    expand_one!(25);
+    expand_one!(26);
+    expand_one!(27);
+    expand_one!(28);
+    expand_one!(29);
+    expand_one!(30);
+    expand_one!(31);
+    expand_one!(32);
+    expand_one!(33);
+    expand_one!(34);
+    expand_one!(35);
+    expand_one!(36);
+    expand_one!(37);
+    expand_one!(38);
+    expand_one!(39);
+    expand_one!(40);
+    expand_one!(41);
+    expand_one!(42);
+    expand_one!(43);
+    expand_one!(44);
+    expand_one!(45);
+    expand_one!(46);
+    expand_one!(47);
+    expand_one!(48);
+    expand_one!(49);
+    expand_one!(50);
+    expand_one!(51);
+    expand_one!(52);
+    expand_one!(53);
+    expand_one!(54);
+    expand_one!(55);
+    expand_one!(56);
+    expand_one!(57);
+    expand_one!(58);
+    expand_one!(59);
+    expand_one!(60);
+    expand_one!(61);
+    expand_one!(62);
+    expand_one!(63);
 
     let mut a = *h0;
     let mut b = *h1;
