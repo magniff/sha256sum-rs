@@ -53,9 +53,9 @@ fn process_chunk(
         *word = u32::from_be_bytes(unsafe { *chunk.get_unchecked(index) })
     }
 
-    macro_rules! expand_one {
+    macro_rules! extend_schedule {
         ($i:expr) => {
-            schedule[$i] = unsafe {
+            schedule[$i] = {
                 let s0 = schedule[$i - 15].rotate_right(7)
                     ^ schedule[$i - 15].rotate_right(18)
                     ^ (schedule[$i - 15] >> 3);
@@ -68,59 +68,59 @@ fn process_chunk(
                     .wrapping_add(s0)
                     .wrapping_add(schedule[$i - 7])
                     .wrapping_add(s1)
-            };
+            }
         };
     }
 
     // Unroll the entire message schedule expansion
-    expand_one!(16);
-    expand_one!(17);
-    expand_one!(18);
-    expand_one!(19);
-    expand_one!(20);
-    expand_one!(21);
-    expand_one!(22);
-    expand_one!(23);
-    expand_one!(24);
-    expand_one!(25);
-    expand_one!(26);
-    expand_one!(27);
-    expand_one!(28);
-    expand_one!(29);
-    expand_one!(30);
-    expand_one!(31);
-    expand_one!(32);
-    expand_one!(33);
-    expand_one!(34);
-    expand_one!(35);
-    expand_one!(36);
-    expand_one!(37);
-    expand_one!(38);
-    expand_one!(39);
-    expand_one!(40);
-    expand_one!(41);
-    expand_one!(42);
-    expand_one!(43);
-    expand_one!(44);
-    expand_one!(45);
-    expand_one!(46);
-    expand_one!(47);
-    expand_one!(48);
-    expand_one!(49);
-    expand_one!(50);
-    expand_one!(51);
-    expand_one!(52);
-    expand_one!(53);
-    expand_one!(54);
-    expand_one!(55);
-    expand_one!(56);
-    expand_one!(57);
-    expand_one!(58);
-    expand_one!(59);
-    expand_one!(60);
-    expand_one!(61);
-    expand_one!(62);
-    expand_one!(63);
+    extend_schedule!(16);
+    extend_schedule!(17);
+    extend_schedule!(18);
+    extend_schedule!(19);
+    extend_schedule!(20);
+    extend_schedule!(21);
+    extend_schedule!(22);
+    extend_schedule!(23);
+    extend_schedule!(24);
+    extend_schedule!(25);
+    extend_schedule!(26);
+    extend_schedule!(27);
+    extend_schedule!(28);
+    extend_schedule!(29);
+    extend_schedule!(30);
+    extend_schedule!(31);
+    extend_schedule!(32);
+    extend_schedule!(33);
+    extend_schedule!(34);
+    extend_schedule!(35);
+    extend_schedule!(36);
+    extend_schedule!(37);
+    extend_schedule!(38);
+    extend_schedule!(39);
+    extend_schedule!(40);
+    extend_schedule!(41);
+    extend_schedule!(42);
+    extend_schedule!(43);
+    extend_schedule!(44);
+    extend_schedule!(45);
+    extend_schedule!(46);
+    extend_schedule!(47);
+    extend_schedule!(48);
+    extend_schedule!(49);
+    extend_schedule!(50);
+    extend_schedule!(51);
+    extend_schedule!(52);
+    extend_schedule!(53);
+    extend_schedule!(54);
+    extend_schedule!(55);
+    extend_schedule!(56);
+    extend_schedule!(57);
+    extend_schedule!(58);
+    extend_schedule!(59);
+    extend_schedule!(60);
+    extend_schedule!(61);
+    extend_schedule!(62);
+    extend_schedule!(63);
 
     let mut a = *h0;
     let mut b = *h1;
@@ -131,7 +131,6 @@ fn process_chunk(
     let mut g = *h6;
     let mut h = *h7;
 
-    // Define helper macros to reduce repetition and noise
     macro_rules! sha_round {
         ($a:ident, $b:ident, $c:ident, $d:ident, $e:ident, $f:ident, $g:ident, $h:ident, $schedule:expr, $round:expr) => {
             let temp1 = $h
