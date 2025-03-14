@@ -47,28 +47,28 @@ fn process_chunk(
     h7: &mut u32,
 ) {
     let mut schedule = [0u32; 64];
-    for (i, word) in schedule[0..16].iter_mut().enumerate() {
+    for (index, word) in schedule[0..16].iter_mut().enumerate() {
         *word = u32::from_be_bytes([
-            chunk[i * 4],
-            chunk[i * 4 + 1],
-            chunk[i * 4 + 2],
-            chunk[i * 4 + 3],
+            chunk[index * 4],
+            chunk[index * 4 + 1],
+            chunk[index * 4 + 2],
+            chunk[index * 4 + 3],
         ]);
     }
 
     for extend_round in 16..64 {
-        let s0 = schedule[extend_round - 15].rotate_right(7)
-            ^ schedule[extend_round - 15].rotate_right(18)
-            ^ (schedule[extend_round - 15] >> 3);
-
-        let s1 = schedule[extend_round - 2].rotate_right(17)
-            ^ schedule[extend_round - 2].rotate_right(19)
-            ^ (schedule[extend_round - 2] >> 10);
-
-        schedule[extend_round] = schedule[extend_round - 16]
-            .wrapping_add(s0)
+        schedule[extend_round] = unsafe { *schedule.get_unchecked(extend_round - 16) }
+            .wrapping_add(
+                schedule[extend_round - 15].rotate_right(7)
+                    ^ schedule[extend_round - 15].rotate_right(18)
+                    ^ (schedule[extend_round - 15] >> 3),
+            )
             .wrapping_add(schedule[extend_round - 7])
-            .wrapping_add(s1);
+            .wrapping_add(
+                schedule[extend_round - 2].rotate_right(17)
+                    ^ schedule[extend_round - 2].rotate_right(19)
+                    ^ (schedule[extend_round - 2] >> 10),
+            );
     }
 
     let mut a = *h0;
@@ -80,25 +80,94 @@ fn process_chunk(
     let mut g = *h6;
     let mut h = *h7;
 
-    for round in 0..64 {
-        let temp1 = h
-            .wrapping_add(e.rotate_right(6) ^ e.rotate_right(11) ^ e.rotate_right(25))
-            .wrapping_add((e & f) ^ ((!e) & g))
-            .wrapping_add(K[round])
-            .wrapping_add(unsafe { *schedule.get_unchecked(round) });
+    // Define helper macros to reduce repetition and noise
+    macro_rules! sha_round {
+        ($a:ident, $b:ident, $c:ident, $d:ident, $e:ident, $f:ident, $g:ident, $h:ident, $schedule:expr, $round:expr) => {
+            let temp1 = $h
+                .wrapping_add($e.rotate_right(6) ^ $e.rotate_right(11) ^ $e.rotate_right(25))
+                .wrapping_add(($e & $f) ^ ((!$e) & $g))
+                .wrapping_add(K[$round])
+                .wrapping_add(unsafe { *$schedule.get_unchecked($round) });
 
-        let S0 = a.rotate_right(2) ^ a.rotate_right(13) ^ a.rotate_right(22);
-        let temp2 = S0.wrapping_add((a & b) ^ (a & c) ^ (b & c));
+            let s0 = $a.rotate_right(2) ^ $a.rotate_right(13) ^ $a.rotate_right(22);
+            let temp2 = s0.wrapping_add(($a & $b) ^ ($a & $c) ^ ($b & $c));
 
-        h = g;
-        g = f;
-        f = e;
-        e = d.wrapping_add(temp1);
-        d = c;
-        c = b;
-        b = a;
-        a = temp1.wrapping_add(temp2);
+            $h = $g;
+            $g = $f;
+            $f = $e;
+            $e = $d.wrapping_add(temp1);
+            $d = $c;
+            $c = $b;
+            $b = $a;
+            $a = temp1.wrapping_add(temp2);
+        };
     }
+
+    // Unrolled loop
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 0);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 1);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 2);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 3);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 4);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 5);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 6);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 7);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 8);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 9);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 10);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 11);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 12);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 13);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 14);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 15);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 16);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 17);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 18);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 19);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 20);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 21);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 22);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 23);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 24);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 25);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 26);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 27);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 28);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 29);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 30);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 31);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 32);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 33);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 34);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 35);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 36);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 37);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 38);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 39);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 40);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 41);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 42);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 43);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 44);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 45);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 46);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 47);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 48);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 49);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 50);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 51);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 52);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 53);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 54);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 55);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 56);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 57);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 58);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 59);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 60);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 61);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 62);
+    sha_round!(a, b, c, d, e, f, g, h, schedule, 63);
 
     *h0 = h0.wrapping_add(a);
     *h1 = h1.wrapping_add(b);
@@ -175,7 +244,8 @@ where
 fn main() -> anyhow::Result<()> {
     let options = Options::parse();
     let mut reader =
-        std::io::BufReader::with_capacity(4096 * 8, std::fs::File::open(&options.path)?);
+        std::io::BufReader::with_capacity(4096 * 256, std::fs::File::open(&options.path)?);
+
     println!(
         "{hash}  {fname}",
         hash = compute_sha256(&mut reader).to_string(),

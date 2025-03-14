@@ -1,0 +1,9 @@
+[build]
+rustflags = [
+    "-C",
+    "target-cpu=native",
+    "-C",
+    "llvm-args=-march=native",
+    "-C",
+    "codegen-units=1",
+]
