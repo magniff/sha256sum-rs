@@ -18,3 +18,5 @@ Benchmark 1: sha256sum data.dat
   Time (mean ± σ):      1.598 s ±  0.029 s    [User: 1.384 s, System: 0.212 s]
   Range (min … max):    1.557 s …  1.640 s    20 runs
 ```
+
+The code have been written during that coding session: https://youtu.be/SPvcIjRUg5Q?si=GlXsbQYXNAk-QLRm
