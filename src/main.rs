@@ -1,5 +1,6 @@
 #![allow(non_snake_case)]
 use clap::Parser;
+use std::arch::x86_64::*;
 
 const K: [u32; 64] = [
     0x428a2f98, 0x71374491, 0xb5c0fbcf, 0xe9b5dba5, 0x3956c25b, 0x59f111f1, 0x923f82a4, 0xab1c5ed5,
@@ -35,7 +36,7 @@ impl std::fmt::Display for Digest {
 }
 
 #[inline]
-fn process_chunk(
+unsafe fn process_chunk(
     chunk: &[u8; 64],
     h0: &mut u32,
     h1: &mut u32,
@@ -46,187 +47,82 @@ fn process_chunk(
     h6: &mut u32,
     h7: &mut u32,
 ) {
-    let mut schedule = [0u32; 64];
-    let chunk: &[[u8; 4]; 16] = unsafe { std::mem::transmute(chunk) };
+    let mut schedule = [
+        _mm_shuffle_epi8(
+            _mm_loadu_si128((chunk as *const u8).add(0) as *const __m128i),
+            _mm_set_epi8(12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3),
+        ),
+        _mm_shuffle_epi8(
+            _mm_loadu_si128((chunk as *const u8).add(16) as *const __m128i),
+            _mm_set_epi8(12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3),
+        ),
+        _mm_shuffle_epi8(
+            _mm_loadu_si128((chunk as *const u8).add(32) as *const __m128i),
+            _mm_set_epi8(12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3),
+        ),
+        _mm_shuffle_epi8(
+            _mm_loadu_si128((chunk as *const u8).add(48) as *const __m128i),
+            _mm_set_epi8(12, 13, 14, 15, 8, 9, 10, 11, 4, 5, 6, 7, 0, 1, 2, 3),
+        ),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+        _mm_setzero_si128(),
+    ];
 
-    for (index, word) in schedule[0..16].iter_mut().enumerate() {
-        *word = u32::from_be_bytes(unsafe { *chunk.get_unchecked(index) })
+    // For t = 16 to 63
+    //     Wt = SSIG1(W(t-2)) + W(t-7) + SSIG0(w(t-15)) + W(t-16)
+    for extend_round in 4..16 {
+        let mut tmp = _mm_sha256msg1_epu32(schedule[extend_round - 4], schedule[extend_round - 3]);
+        let w7 = _mm_alignr_epi8(schedule[extend_round - 1], schedule[extend_round - 2], 4);
+        tmp = _mm_add_epi32(tmp, w7);
+        schedule[extend_round] = _mm_sha256msg2_epu32(tmp, schedule[extend_round - 1])
     }
 
-    macro_rules! extend_schedule {
-        ($i:expr) => {
-            schedule[$i] = {
-                let s0 = schedule[$i - 15].rotate_right(7)
-                    ^ schedule[$i - 15].rotate_right(18)
-                    ^ (schedule[$i - 15] >> 3);
+    // Perform 2 rounds of SHA256 operation using an initial SHA256 state (C,D,G,H) from a, an initial SHA256 state (A,B,E,F)
+    let mut state0 = _mm_set_epi32(*h0 as i32, *h1 as i32, *h4 as i32, *h5 as i32);
+    let mut state1 = _mm_set_epi32(*h2 as i32, *h3 as i32, *h6 as i32, *h7 as i32);
 
-                let s1 = schedule[$i - 2].rotate_right(17)
-                    ^ schedule[$i - 2].rotate_right(19)
-                    ^ (schedule[$i - 2] >> 10);
+    let state0_save = state0;
+    let state1_save = state1;
 
-                schedule[$i - 16]
-                    .wrapping_add(s0)
-                    .wrapping_add(schedule[$i - 7])
-                    .wrapping_add(s1)
-            }
-        };
+    for sha_round in 0..16 {
+        let round_idx = sha_round * 4;
+        let k_const = _mm_set_epi32(
+            K[round_idx + 3] as i32,
+            K[round_idx + 2] as i32,
+            K[round_idx + 1] as i32,
+            K[round_idx] as i32,
+        );
+
+        let w_rounds = schedule[sha_round];
+        state1 = _mm_sha256rnds2_epu32(state1, state0, _mm_add_epi32(w_rounds, k_const));
+        state0 = _mm_sha256rnds2_epu32(
+            state0,
+            state1,
+            _mm_add_epi32(_mm_srli_si128(w_rounds, 8), _mm_srli_si128(k_const, 8)),
+        );
     }
 
-    // Unroll the entire message schedule expansion
-    extend_schedule!(16);
-    extend_schedule!(17);
-    extend_schedule!(18);
-    extend_schedule!(19);
-    extend_schedule!(20);
-    extend_schedule!(21);
-    extend_schedule!(22);
-    extend_schedule!(23);
-    extend_schedule!(24);
-    extend_schedule!(25);
-    extend_schedule!(26);
-    extend_schedule!(27);
-    extend_schedule!(28);
-    extend_schedule!(29);
-    extend_schedule!(30);
-    extend_schedule!(31);
-    extend_schedule!(32);
-    extend_schedule!(33);
-    extend_schedule!(34);
-    extend_schedule!(35);
-    extend_schedule!(36);
-    extend_schedule!(37);
-    extend_schedule!(38);
-    extend_schedule!(39);
-    extend_schedule!(40);
-    extend_schedule!(41);
-    extend_schedule!(42);
-    extend_schedule!(43);
-    extend_schedule!(44);
-    extend_schedule!(45);
-    extend_schedule!(46);
-    extend_schedule!(47);
-    extend_schedule!(48);
-    extend_schedule!(49);
-    extend_schedule!(50);
-    extend_schedule!(51);
-    extend_schedule!(52);
-    extend_schedule!(53);
-    extend_schedule!(54);
-    extend_schedule!(55);
-    extend_schedule!(56);
-    extend_schedule!(57);
-    extend_schedule!(58);
-    extend_schedule!(59);
-    extend_schedule!(60);
-    extend_schedule!(61);
-    extend_schedule!(62);
-    extend_schedule!(63);
+    state0 = _mm_add_epi32(state0, state0_save);
+    state1 = _mm_add_epi32(state1, state1_save);
 
-    let mut a = *h0;
-    let mut b = *h1;
-    let mut c = *h2;
-    let mut d = *h3;
-    let mut e = *h4;
-    let mut f = *h5;
-    let mut g = *h6;
-    let mut h = *h7;
-
-    macro_rules! sha_round {
-        ($a:ident, $b:ident, $c:ident, $d:ident, $e:ident, $f:ident, $g:ident, $h:ident, $schedule:expr, $round:expr) => {
-            let temp1 = $h
-                .wrapping_add($e.rotate_right(6) ^ $e.rotate_right(11) ^ $e.rotate_right(25))
-                .wrapping_add(($e & $f) ^ ((!$e) & $g))
-                .wrapping_add(K[$round])
-                .wrapping_add(unsafe { *$schedule.get_unchecked($round) });
-
-            let s0 = $a.rotate_right(2) ^ $a.rotate_right(13) ^ $a.rotate_right(22);
-            let temp2 = s0.wrapping_add(($a & $b) ^ ($a & $c) ^ ($b & $c));
-
-            $h = $g;
-            $g = $f;
-            $f = $e;
-            $e = $d.wrapping_add(temp1);
-            $d = $c;
-            $c = $b;
-            $b = $a;
-            $a = temp1.wrapping_add(temp2);
-        };
-    }
-
-    // Unrolled loop
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 0);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 1);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 2);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 3);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 4);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 5);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 6);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 7);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 8);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 9);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 10);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 11);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 12);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 13);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 14);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 15);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 16);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 17);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 18);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 19);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 20);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 21);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 22);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 23);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 24);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 25);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 26);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 27);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 28);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 29);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 30);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 31);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 32);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 33);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 34);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 35);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 36);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 37);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 38);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 39);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 40);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 41);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 42);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 43);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 44);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 45);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 46);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 47);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 48);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 49);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 50);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 51);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 52);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 53);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 54);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 55);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 56);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 57);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 58);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 59);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 60);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 61);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 62);
-    sha_round!(a, b, c, d, e, f, g, h, schedule, 63);
-
-    *h0 = h0.wrapping_add(a);
-    *h1 = h1.wrapping_add(b);
-    *h2 = h2.wrapping_add(c);
-    *h3 = h3.wrapping_add(d);
-    *h4 = h4.wrapping_add(e);
-    *h5 = h5.wrapping_add(f);
-    *h6 = h6.wrapping_add(g);
-    *h7 = h7.wrapping_add(h);
+    *h0 = _mm_extract_epi32(state0, 3) as u32;
+    *h1 = _mm_extract_epi32(state0, 2) as u32;
+    *h2 = _mm_extract_epi32(state1, 3) as u32;
+    *h3 = _mm_extract_epi32(state1, 2) as u32;
+    *h4 = _mm_extract_epi32(state0, 1) as u32;
+    *h5 = _mm_extract_epi32(state0, 0) as u32;
+    *h6 = _mm_extract_epi32(state1, 1) as u32;
+    *h7 = _mm_extract_epi32(state1, 0) as u32;
 }
 
 fn compute_sha256<T>(mut reader: T) -> Digest
@@ -247,35 +143,40 @@ where
     // the spec asks for u64 no matter what usize happened to be on that machine
     let mut len_bits: u64 = 0;
 
-    while let Ok(bytes_read) = reader.read(&mut chunk) {
-        len_bits += bytes_read as u64 * 8;
-        match bytes_read {
-            64 => process_chunk(
-                &chunk, &mut h0, &mut h1, &mut h2, &mut h3, &mut h4, &mut h5, &mut h6, &mut h7,
-            ),
-            0..56 => {
-                chunk[bytes_read] = 0b10000000;
-                chunk[bytes_read + 1..56].fill(0);
-                chunk[56..].copy_from_slice(&len_bits.to_be_bytes());
-                process_chunk(
+    unsafe {
+        while let Ok(bytes_read) = reader.read(&mut chunk) {
+            len_bits += bytes_read as u64 * 8;
+            match bytes_read {
+                64 => process_chunk(
                     &chunk, &mut h0, &mut h1, &mut h2, &mut h3, &mut h4, &mut h5, &mut h6, &mut h7,
-                );
-                break;
+                ),
+                0..56 => {
+                    chunk[bytes_read] = 0b10000000;
+                    chunk[bytes_read + 1..56].fill(0);
+                    chunk[56..].copy_from_slice(&len_bits.to_be_bytes());
+                    process_chunk(
+                        &chunk, &mut h0, &mut h1, &mut h2, &mut h3, &mut h4, &mut h5, &mut h6,
+                        &mut h7,
+                    );
+                    break;
+                }
+                56..64 => {
+                    chunk[bytes_read] = 0b10000000;
+                    chunk[bytes_read + 1..].fill(0);
+                    process_chunk(
+                        &chunk, &mut h0, &mut h1, &mut h2, &mut h3, &mut h4, &mut h5, &mut h6,
+                        &mut h7,
+                    );
+                    chunk.fill(0);
+                    chunk[56..].copy_from_slice(&len_bits.to_be_bytes());
+                    process_chunk(
+                        &chunk, &mut h0, &mut h1, &mut h2, &mut h3, &mut h4, &mut h5, &mut h6,
+                        &mut h7,
+                    );
+                    break;
+                }
+                _ => unreachable!(),
             }
-            56..64 => {
-                chunk[bytes_read] = 0b10000000;
-                chunk[bytes_read + 1..].fill(0);
-                process_chunk(
-                    &chunk, &mut h0, &mut h1, &mut h2, &mut h3, &mut h4, &mut h5, &mut h6, &mut h7,
-                );
-                chunk.fill(0);
-                chunk[56..].copy_from_slice(&len_bits.to_be_bytes());
-                process_chunk(
-                    &chunk, &mut h0, &mut h1, &mut h2, &mut h3, &mut h4, &mut h5, &mut h6, &mut h7,
-                );
-                break;
-            }
-            _ => unreachable!(),
         }
     }
 
